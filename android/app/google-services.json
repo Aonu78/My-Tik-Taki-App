@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "546378916569",
+    "project_id": "my-tik-taki",
+    "storage_bucket": "my-tik-taki.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:546378916569:android:5d0f429dafbe74bfd414c8",
+        "android_client_info": {
+          "package_name": "com.my_tik_taki"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "546378916569-jes6orb1rnn328gfspro5cunqmtnl80h.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAKZFVuvYycmwxBgxMNJWDvUVl9db52g3I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "546378916569-jes6orb1rnn328gfspro5cunqmtnl80h.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

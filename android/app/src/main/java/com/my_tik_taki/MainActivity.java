@@ -1,4 +1,4 @@
-package com.example.my_tik_taki;
+package com.my_tik_taki;
 
 import android.Manifest;
 import android.app.DownloadManager;

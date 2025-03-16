@@ -5,31 +5,47 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_downloader/flutter_downloader.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:video_player/video_player.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:receive_sharing_intent/receive_sharing_intent.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:firebase_core/firebase_core.dart';
 
+// Initialize local notifications plugin
 FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-FlutterLocalNotificationsPlugin();
+    FlutterLocalNotificationsPlugin();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Initialize necessary plugins and request permissions
   await FlutterDownloader.initialize(debug: false);
   await Permission.manageExternalStorage.request();
   await createDownloadsDirectory(); // Create downloads directory
 
+  // Configure notifications
   var initializationSettingsAndroid =
-  AndroidInitializationSettings('@mipmap/ic_launcher');
+      AndroidInitializationSettings('@mipmap/ic_launcher');
   var initializationSettings =
-  InitializationSettings(android: initializationSettingsAndroid);
+      InitializationSettings(android: initializationSettingsAndroid);
   await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+  // Firebase initialization and Analytics
+  try {
+    await Firebase.initializeApp();
+    FirebaseAnalytics analytics = FirebaseAnalytics.instance;
 
+    // Log custom event on app open
+    await analytics.logEvent(
+      name: 'app_open',
+      parameters: {'platform': 'android'}, // Optional parameters
+    );
+  } catch (e) {
+    print("Error initializing Firebase: $e");
+  }
   runApp(MyApp());
 }
 
+// Create downloads directory
 Future<void> createDownloadsDirectory() async {
   var directory = Directory('/storage/emulated/0/Download');
   if (!(await directory.exists())) {
@@ -40,6 +56,7 @@ Future<void> createDownloadsDirectory() async {
   }
 }
 
+// MyApp widget that initializes the app
 class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -50,6 +67,7 @@ class MyApp extends StatelessWidget {
   }
 }
 
+// SplashScreen with a delay before navigating to HomeScreen
 class SplashScreen extends StatefulWidget {
   @override
   _SplashScreenState createState() => _SplashScreenState();
@@ -63,6 +81,7 @@ class _SplashScreenState extends State<SplashScreen> {
     _navigateToHome();
   }
 
+  // Navigate to HomeScreen after 3 seconds
   _navigateToHome() async {
     await Future.delayed(Duration(seconds: 3));
     Navigator.pushReplacement(
@@ -71,12 +90,12 @@ class _SplashScreenState extends State<SplashScreen> {
     );
   }
 
+  // Check for storage permissions
   Future<void> _checkPermissions() async {
     var status = await Permission.manageExternalStorage.status;
     if (!status.isGranted) {
       status = await Permission.manageExternalStorage.request();
       if (!status.isGranted) {
-        // Handle the case where permission is not granted
         print("Storage permission is denied");
       }
     }
@@ -86,15 +105,16 @@ class _SplashScreenState extends State<SplashScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Center(
-        child: Text(
-          'My Tik Taki',
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+        child: Image.asset(
+          'assets/splash_image.png', // Path to splash image
+          fit: BoxFit.cover,
         ),
       ),
     );
   }
 }
 
+// Model to track download progress and completion
 class DownloadModel {
   String fileName;
   int progress;
@@ -109,6 +129,7 @@ class DownloadModel {
   });
 }
 
+// HomeScreen with WebView and download functionality
 class HomeScreen extends StatefulWidget {
   @override
   _HomeScreenState createState() => _HomeScreenState();
@@ -117,8 +138,17 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late WebViewController _controller;
   final StreamController<DownloadModel> _downloadController =
-  StreamController<DownloadModel>.broadcast();
+      StreamController<DownloadModel>.broadcast();
+  List<DownloadModel> _downloads = []; // List to store all downloads
   DownloadModel? _currentDownload;
+  bool _isLoading = true;
+  bool _isOffline = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkConnectivity();
+  }
 
   @override
   void dispose() {
@@ -126,87 +156,169 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
+  // Check for internet connectivity
+  Future<void> _checkConnectivity() async {
+    var connectivityResult = await (Connectivity().checkConnectivity());
+    setState(() {
+      _isOffline = connectivityResult == ConnectivityResult.none;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('My Tik Taki'),
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: WebView(
-              initialUrl: 'https://super-marzipan-94e6d2.netlify.app/',
-              javascriptMode: JavascriptMode.unrestricted,
-              onWebViewCreated: (WebViewController webViewController) {
-                _controller = webViewController;
-              },
-              javascriptChannels: {
-                JavascriptChannel(
-                  name: 'BlobHandler',
-                  onMessageReceived: (JavascriptMessage message) async {
-                    String base64String = message.message;
-                    String fileNameFinal = _generateRandomString(10) + '.mp4';
-                    _currentDownload = DownloadModel(fileName: fileNameFinal);
-                    _downloadController.add(_currentDownload!);
-                    await _downloadBase64File(
-                        base64String, _currentDownload!.fileName);
+      appBar: AppBar(title: Text('My Tik Taki')),
+      body: _isOffline
+          ? Center(child: CircularProgressIndicator()) // Show loader if offline
+          : Column(
+              children: [
+                Expanded(
+                  child: Stack(
+                    children: [
+                      WebView(
+                        initialUrl: 'https://my-tik-taki.netlify.app/',
+                        javascriptMode: JavascriptMode.unrestricted,
+                        onWebViewCreated:
+                            (WebViewController webViewController) {
+                          _controller = webViewController;
+                        },
+                        onPageFinished: (_) {
+                          setState(() {
+                            _isLoading = false; // Hide loader when page loaded
+                          });
+                        },
+                        javascriptChannels: {
+                          JavascriptChannel(
+                            name: 'BlobHandler',
+                            onMessageReceived:
+                                (JavascriptMessage message) async {
+                              String base64String = message.message;
+                              String fileNameFinal =
+                                  _generateRandomString(10) + '.mp4';
+                              _currentDownload =
+                                  DownloadModel(fileName: fileNameFinal);
+                              _downloadController.add(_currentDownload!);
+                              await _downloadBase64File(
+                                  base64String, _currentDownload!.fileName);
+                            },
+                          ),
+                        },
+                        navigationDelegate: (NavigationRequest request) {
+                          if (request.url.startsWith('blob:')) {
+                            _injectBlobHandler(request.url);
+                            return NavigationDecision.prevent;
+                          }
+                          return NavigationDecision.navigate;
+                        },
+                      ),
+                      if (_isLoading)
+                        Center(child: CircularProgressIndicator()),
+                    ],
+                  ),
+                ),
+                StreamBuilder<DownloadModel>(
+                  stream: _downloadController.stream,
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) return SizedBox.shrink();
+                    final download = snapshot.data!;
+                    return Column(
+                      children: [
+                        if (!download.isComplete)
+                          LinearProgressIndicator(
+                            value: download.progress / 100,
+                            backgroundColor: Colors.grey,
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.blue),
+                          ),
+                        if (download.isComplete && download.filePath != null)
+                          ElevatedButton(
+                            onPressed: () {
+                              Share.shareXFiles([XFile(download.filePath!)],
+                                  text:
+                                      'Check out this file: ${download.fileName}');
+                            },
+                            child: Text('Share ${download.fileName}'),
+                          ),
+                      ],
+                    );
                   },
                 ),
-              },
-              navigationDelegate: (NavigationRequest request) {
-                if (request.url.startsWith('blob:')) {
-                  _injectBlobHandler(request.url);
-                  return NavigationDecision.prevent;
-                }
-                return NavigationDecision.navigate;
-              },
+                _buildFooter(),
+              ],
             ),
-          ),
-          StreamBuilder<DownloadModel>(
-            stream: _downloadController.stream,
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) {
-                return SizedBox.shrink();
-              }
+    );
+  }
 
-              final download = snapshot.data!;
-              return Column(
-                children: [
-                  if (!download.isComplete)
-                    LinearProgressIndicator(
-                      value: download.progress / 100,
-                      backgroundColor: Colors.grey,
-                      valueColor:
-                      AlwaysStoppedAnimation<Color>(Colors.blue),
-                    ),
-                  if (download.isComplete && download.filePath != null)
-                    ElevatedButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => VideoPlayerScreen(
-                              filePath: download.filePath!,
-                            ),
-                          ),
-                        );
-                      },
-                      child: Text('Play ${download.fileName}'),
-                    ),
-                ],
-              );
-            },
+  // Build the footer with download management
+  Widget _buildFooter() {
+    return Container(
+      padding: EdgeInsets.all(10),
+      color: Colors.grey[200],
+      child: Column(
+        children: [
+          ElevatedButton(
+            onPressed: _showDownloads,
+            child: Text('Show Downloads'),
           ),
         ],
       ),
     );
   }
-  String _generateRandomString(int length) {
-    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    final rand = Random();
-    return List.generate(length, (index) => chars[rand.nextInt(chars.length)]).join();
+
+  // Show a dialog with the list of downloads
+  void _showDownloads() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Downloads'),
+          content: Container(
+            width: double.maxFinite,
+            child: ListView.builder(
+              itemCount: _downloads.length,
+              itemBuilder: (context, index) {
+                final download = _downloads[index];
+                return ListTile(
+                  title: Text(download.fileName),
+                  trailing: IconButton(
+                    icon: Icon(Icons.close),
+                    onPressed: () {
+                      // Remove download from list
+                      setState(() {
+                        _downloads.removeAt(index);
+                      });
+                    },
+                  ),
+                  onTap: () {
+                    // Share the file
+                    Share.shareXFiles([XFile(download.filePath!)],
+                        text: 'Check out this file: ${download.fileName}');
+                  },
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
   }
+
+  // Generate random file name
+  String _generateRandomString(int length) {
+    const chars =
+        'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    final rand = Random();
+    return List.generate(length, (index) => chars[rand.nextInt(chars.length)])
+        .join();
+  }
+
+  // Inject JavaScript to handle blob URLs
   void _injectBlobHandler(String blobUrl) {
     String jsCode = '''
       (function() {
@@ -230,140 +342,55 @@ class _HomeScreenState extends State<HomeScreen> {
     _controller.runJavascript(jsCode);
   }
 
-  Future<void> _downloadBase64File(
-      String base64String, String fileName) async {
-    bool status = await _requestPermission();
-    if (status) {
+  // Handle downloading base64-encoded file
+  Future<void> _downloadBase64File(String base64String, String fileName) async {
+    bool permissionGranted = await _requestPermission();
+    if (permissionGranted) {
       final appDocDir = Directory('/storage/emulated/0/Download');
-      if (appDocDir == null) {
-        print("Error: Application documents directory is null.");
-        return;
-      }
       final filePath = '${appDocDir.path}/$fileName';
       final bytes = base64Decode(base64String);
-      final file = File(filePath);
-
-      // Show notification on download start
-      await _showDownloadNotification(
-          'Download Started', 'Downloading $fileName');
-      print("Download Started");
+      File file = File(filePath);
       await file.writeAsBytes(bytes);
 
-      // Show notification on download completion
-      await _showDownloadNotification(
-          'Download Completed', '$fileName downloaded to $filePath');
-      print("File downloaded to $filePath");
-
+      // Update download progress and completion status
       setState(() {
+        _currentDownload?.progress = 100;
         _currentDownload?.isComplete = true;
         _currentDownload?.filePath = filePath;
-        _downloadController.add(_currentDownload!);
+        _downloads.add(_currentDownload!);
       });
-    } else {
-      print('Permission denied for storage');
+
+      // Show notification on download completion
+      _showDownloadNotification(fileName);
     }
   }
 
+  // Request storage permission
   Future<bool> _requestPermission() async {
     var status = await Permission.manageExternalStorage.status;
     if (status.isGranted) {
-      print("Storage permission is already granted");
       return true;
     } else {
       status = await Permission.manageExternalStorage.request();
-      if (status.isGranted) {
-        print("Storage permission is granted");
-        return true;
-      } else {
-        print("Storage permission is denied");
-        return false;
-      }
+      return status.isGranted;
     }
   }
 
-  Future<void> _showDownloadNotification(String title, String body) async {
-    var androidPlatformChannelSpecifics = AndroidNotificationDetails(
+  // Show a download notification
+  Future<void> _showDownloadNotification(String fileName) async {
+    var androidDetails = AndroidNotificationDetails(
       'download_channel',
-      'Download Notifications',
-      channelDescription:
-      'Channel for showing download status notifications',
-      importance: Importance.max,
+      'Downloads',
+      channelDescription: 'Download notifications',
+      importance: Importance.high,
       priority: Priority.high,
-      showWhen: false,
     );
-    var platformChannelSpecifics =
-    NotificationDetails(android: androidPlatformChannelSpecifics);
+    var platformDetails = NotificationDetails(android: androidDetails);
     await flutterLocalNotificationsPlugin.show(
       0,
-      title,
-      body,
-      platformChannelSpecifics,
-      payload: 'item x',
-    );
-  }
-}
-
-class VideoPlayerScreen extends StatefulWidget {
-  final String filePath;
-
-  VideoPlayerScreen({required this.filePath});
-
-  @override
-  _VideoPlayerScreenState createState() => _VideoPlayerScreenState();
-}
-
-class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
-  late VideoPlayerController _controller;
-  late Future<void> _initializeVideoPlayerFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = VideoPlayerController.file(File(widget.filePath));
-    _initializeVideoPlayerFuture = _controller.initialize();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Video Player'),
-      ),
-      body: FutureBuilder(
-        future: _initializeVideoPlayerFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.done) {
-            return Center(
-              child: AspectRatio(
-                aspectRatio: _controller.value.aspectRatio,
-                child: VideoPlayer(_controller),
-              ),
-            );
-          } else {
-            return Center(child: CircularProgressIndicator());
-          }
-        },
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          setState(() {
-            if (_controller.value.isPlaying) {
-              _controller.pause();
-            } else {
-              _controller.play();
-            }
-          });
-        },
-        child: Icon(
-          _controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
-        ),
-      ),
+      'Download Complete',
+      'File $fileName has been downloaded successfully',
+      platformDetails,
     );
   }
 }
