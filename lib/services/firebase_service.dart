@@ -1,5 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:flutter/foundation.dart';
 
 class FirebaseService {
   static Future<void> initialize() async {
@@ -11,7 +12,7 @@ class FirebaseService {
         parameters: {'platform': 'android'},
       );
     } catch (e) {
-      print("Error initializing Firebase: $e");
+      debugPrint("Error initializing Firebase: $e");
     }
   }
 }

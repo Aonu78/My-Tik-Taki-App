@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:flutter_downloader/flutter_downloader.dart';
 import 'package:my_tik_taki/models/download_model.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -13,8 +12,8 @@ class DownloadService {
 
   Stream<DownloadModel> get downloadStream => _downloadController.stream;
 
-  Future<void> downloadBase64File(
-      String base64String, String fileName, Function(DownloadModel) onProgress) async {
+  Future<void> downloadBase64File(String base64String, String fileName,
+      Function(DownloadModel) onProgress) async {
     bool permissionGranted = await _requestPermission();
     if (permissionGranted) {
       final appDocDir = Directory('/storage/emulated/0/Download');
@@ -23,7 +22,11 @@ class DownloadService {
       File file = File(filePath);
       await file.writeAsBytes(bytes);
 
-      var download = DownloadModel(fileName: fileName, progress: 100, isComplete: true, filePath: filePath);
+      var download = DownloadModel(
+          fileName: fileName,
+          progress: 100,
+          isComplete: true,
+          filePath: filePath);
       onProgress(download);
       _downloadController.add(download);
     }

@@ -3,7 +3,10 @@ import 'package:my_tik_taki/ui/home_screen.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
+
   @override
+  // ignore: library_private_types_in_public_api
   _SplashScreenState createState() => _SplashScreenState();
 }
 
@@ -15,9 +18,10 @@ class _SplashScreenState extends State<SplashScreen> {
     _navigateToHome();
   }
 
-  _navigateToHome() async {
+  Future<void> _navigateToHome() async {
     await Future.delayed(Duration(seconds: 3));
     Navigator.pushReplacement(
+      // ignore: use_build_context_synchronously
       context,
       MaterialPageRoute(builder: (context) => HomeScreen()),
     );
@@ -28,7 +32,7 @@ class _SplashScreenState extends State<SplashScreen> {
     if (!status.isGranted) {
       status = await Permission.manageExternalStorage.request();
       if (!status.isGranted) {
-        print("Storage permission is denied");
+        debugPrint("Storage permission is denied");
       }
     }
   }

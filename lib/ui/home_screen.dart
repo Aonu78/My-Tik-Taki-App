@@ -10,7 +10,10 @@ import 'package:share_plus/share_plus.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
   @override
+  // ignore: library_private_types_in_public_api
   _HomeScreenState createState() => _HomeScreenState();
 }
 
@@ -18,7 +21,7 @@ class _HomeScreenState extends State<HomeScreen> {
   late final WebViewController _controller;
   final _downloadService = DownloadService();
   late final NotificationService _notificationService;
-  List<DownloadModel> _downloads = [];
+  final List<DownloadModel> _downloads = [];
   bool _isLoading = true;
   bool _isOffline = false;
 
@@ -64,10 +67,13 @@ class _HomeScreenState extends State<HomeScreen> {
         'BlobHandler',
         onMessageReceived: (JavaScriptMessage message) async {
           String base64String = message.message;
-          String fileNameFinal = _downloadService.generateRandomString(10) + '.mp4';
-          await _downloadService.downloadBase64File(base64String, fileNameFinal, (download) {
+          String fileNameFinal =
+              '${_downloadService.generateRandomString(10)}.mp4';
+          await _downloadService.downloadBase64File(base64String, fileNameFinal,
+              (download) {
             setState(() {
-              final existingDownloadIndex = _downloads.indexWhere((d) => d.fileName == download.fileName);
+              final existingDownloadIndex =
+                  _downloads.indexWhere((d) => d.fileName == download.fileName);
               if (existingDownloadIndex != -1) {
                 _downloads[existingDownloadIndex] = download;
               } else {
@@ -89,7 +95,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _checkConnectivity() async {
     var connectivityResult = await (Connectivity().checkConnectivity());
     setState(() {
-      _isOffline = connectivityResult == ConnectivityResult.none;
+      _isOffline = connectivityResult.first == ConnectivityResult.none;
     });
   }
 
@@ -102,7 +108,8 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text('You are offline. Please check your internet connection.'),
+                  Text(
+                      'You are offline. Please check your internet connection.'),
                   SizedBox(height: 20),
                   ElevatedButton(
                     onPressed: () {
@@ -154,7 +161,7 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context) {
         return AlertDialog(
           title: Text('Downloads'),
-          content: Container(
+          content: SizedBox(
             width: double.maxFinite,
             child: ListView.builder(
               itemCount: _downloads.length,
@@ -177,6 +184,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   onTap: () {
                     if (download.isComplete) {
+                      // ignore: deprecated_member_use
                       Share.shareXFiles([XFile(download.filePath!)],
                           text: 'Check out this file: ${download.fileName}');
                     }
